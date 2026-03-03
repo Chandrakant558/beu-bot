@@ -3,7 +3,6 @@ import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 
 
 def create_driver():
@@ -16,11 +15,12 @@ def create_driver():
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 
-    # Try common chrome paths (Render / Linux)
+    # Try common Linux chrome paths (Render compatible attempt)
     possible_paths = [
         "/usr/bin/chromium",
         "/usr/bin/chromium-browser",
         "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
     ]
 
     for path in possible_paths:
@@ -28,33 +28,47 @@ def create_driver():
             chrome_options.binary_location = path
             break
 
-    driver = webdriver.Chrome(options=chrome_options)
-
-    return driver
+    try:
+        driver = webdriver.Chrome(options=chrome_options)
+        return driver
+    except Exception as e:
+        raise Exception("❌ Chrome not found on server. Selenium cannot start.\n" + str(e))
 
 
 def open_login_and_capture_captcha():
     driver = create_driver()
+
     driver.get("https://beu.intelllexams.com/BeuIntellLoginPage.aspx")
 
     time.sleep(4)
 
-    captcha = driver.find_element(By.ID, "imgCaptcha")
-    captcha.screenshot("captcha.png")
+    try:
+        captcha = driver.find_element(By.ID, "imgCaptcha")
+        captcha.screenshot("captcha.png")
+    except Exception:
+        driver.quit()
+        raise Exception("❌ Captcha element not found.")
 
     return driver
 
 
 def perform_login(driver, reg_no, password, captcha_text):
-    driver.find_element(By.ID, "txtRegNo").send_keys(reg_no)
-    driver.find_element(By.ID, "txtPassword").send_keys(password)
-    driver.find_element(By.ID, "txtCaptcha").send_keys(captcha_text)
+    try:
+        driver.find_element(By.ID, "txtRegNo").send_keys(reg_no)
+        driver.find_element(By.ID, "txtPassword").send_keys(password)
+        driver.find_element(By.ID, "txtCaptcha").send_keys(captcha_text)
 
-    driver.find_element(By.ID, "btnLogin").click()
+        driver.find_element(By.ID, "btnLogin").click()
 
-    time.sleep(5)
+        time.sleep(5)
 
-    if "Dashboard" in driver.page_source or "Logout" in driver.page_source:
-        return True
+        page_source = driver.page_source
 
-    return False
+        if "Dashboard" in page_source or "Logout" in page_source:
+            return True
+
+        return False
+
+    except Exception as e:
+        print("Login error:", e)
+        return False
